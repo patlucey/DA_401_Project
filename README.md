@@ -27,7 +27,7 @@ Raster data files:
 
 CSV files:
 - duck_data.csv
-- goose.csv
+- goose.csv(contact lucey_p1@denison.edu for access. File to large to upload into github)
 
 Key Variables(Raster data):
 - Latitude: Coordinate point for the latitudinal location of the point in the map.
