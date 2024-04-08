@@ -1,0 +1,713 @@
+---
+title: "401Proj"
+author: "Patrick Lucey"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(sf)
+library(tidyverse)
+library(ggplot2)
+library(terra)
+library(xml2)
+library(ggmap)
+library(leaflet)
+library(raster)
+library(terra)
+library(lubridate)
+library(geosphere)
+library(magick)
+library(car)
+library(broom)
+library(stargazer)
+library(performance)
+```
+
+
+
+### Reading in data
+
+```{r}
+duck_data <- read_csv('/Users/patrick/Documents/Denison/DA401/Proj/duck_data.csv')
+
+goose_data <- read_csv('/Users/patrick/Documents/Denison/DA401/Proj/goose.csv')
+
+
+
+```
+
+
+
+```{r}
+raster_data1 <- rast('/Users/patrick/Documents/Denison/DA401/Proj/rastergoodes.tif')
+```
+
+```{r}
+raster_data2 <- rast('/Users/patrick/Documents/Denison/DA401/Proj/rasterwgs84.tif')
+```
+
+
+```{r}
+raster_noise <-rast('/Users/patrick/Documents/Denison/DA401/Proj/noise2.tif')
+```
+
+
+
+```{r}
+plot(raster_data1, main="Probability of Urban Expansion by 2030")
+
+```
+
+```{r}
+plot(raster_data2, main="Probability of Urban Expansion by 2030")
+```
+
+```{r}
+plot(raster_noise) # Plot the raster without the main argument
+title(main="Map of Existing noise pollution levels in the US") 
+```
+
+```{r}
+# Extract coordinates
+coordss <- xyFromCell(raster_noise, 1:ncell(raster_noise))
+
+# Extract values for each noise layer
+noise_1_values <- values(raster_noise[[1]])
+noise_2_values <- values(raster_noise[[2]])
+noise_3_values <- values(raster_noise[[3]])
+```
+
+```{r}
+# Mutate to add a date column 
+goose_data <- goose_data %>%
+  mutate(date = as.Date(`timestamp`))
+
+```
+
+```{r}
+# Filter to keep only the first occurrence of each date
+goose_data <-  goose_data %>%
+  group_by(date) %>%
+  slice(1) %>%
+  ungroup()
+```
+
+```{r}
+ duck_data <- duck_data %>%
+  mutate(date = as.Date(`timestamp`))
+
+```
+
+```{r}
+# Filter to keep only the first occurrence of each date
+duck_data <-  duck_data %>%
+  group_by(date) %>%
+  slice(1) %>%
+  ungroup()
+```
+
+
+```{R}
+north_america_extent <- ext(-169, -52, 7, 84)
+```
+
+```{r}
+raster_data_geo <- project(raster_data1, "+proj=longlat +datum=WGS84")
+```
+
+```{r}
+raster_data_na <- crop(raster_data_geo, north_america_extent)
+plot(raster_data_na, main="Probability of Urban Expansion in North America by 2030 from 2000")
+```
+
+```{r}
+# Get the extent of the raster
+raster_extent <- ext(raster_data1)
+
+# Directly access the min and max values from the extent
+xmin <- raster_extent[1]
+xmax <- raster_extent[2]
+ymin <- raster_extent[3]
+ymax <- raster_extent[4]
+
+# Calculate sequences of coordinates within the extent, adjusting the step size as needed
+x_coords <- seq(xmin, xmax, by = res(raster_data1)[1] * 10)
+y_coords <- seq(ymin, ymax, by = res(raster_data1)[2] * 10)
+
+# Create a grid of points
+points_grid <- expand.grid(x = x_coords, y = y_coords)
+
+# First, ensure your points_grid dataframe has coordinates named correctly
+coordinates <- cbind(points_grid$x, points_grid$y)
+
+# Now, convert these coordinates to a SpatVector
+points_vector <- vect(coordinates, crs=crs(raster_data1))
+
+
+# Extract values from the raster at these point locations
+extracted_values <- extract(raster_data1, points_vector)
+points_grid$Value <- extracted_values[,1]  # Assuming interest in the first layer
+
+
+```
+
+
+
+```{r}
+# Create the leaflet map
+leaflet() %>%
+  addProviderTiles(providers$Esri.WorldImagery) %>%
+  addRasterImage(raster_data_na, colors = colorNumeric(palette = "viridis", domain = range(values(raster_data_na), na.rm = TRUE)), opacity = 0.7) %>%
+  addLayersControl(overlayGroups = c("Raster Data"), options = layersControlOptions(collapsed = FALSE)) %>%
+  setView(lng = -98.5795, lat = 39.8283, zoom = 3) # Centering the map over North America
+
+```
+
+```{r}
+ggplot(data = raster_df2) +
+  geom_tile(aes(x = x, y = y, fill = Probabilty)) +  # 'layer' holds the raster values
+  scale_fill_gradient(low = "blue", high = "red", na.value = NA, 
+                      name = "Probability", limits=c(0, 102)) +
+  coord_fixed() +
+  labs(x = "Longitude", y = "Latitude", title = "Raster Data Map: Probabilities") +
+  theme_minimal()
+```
+
+```{r}
+# Ensure values are extracted as a vector
+raster_values <- values(raster_data2)
+
+# Extract coordinates
+coords2 <- xyFromCell(raster_data2, 1:ncell(raster_data2))
+
+# Combine into a data frame
+data_frame <- data.frame(coords2, Value = raster_values)
+
+# Now, try sorting again - ensuring 'Value' is indeed a vector
+sorted_data_frame <- data_frame[order(data_frame$Value, decreasing = TRUE), ]
+
+# Display the top rows of the sorted data frame to verify
+head(sorted_data_frame)
+```
+
+```{r}
+rasterExtent <- ext(raster_data1)
+print(rasterExtent)
+```
+
+```{r}
+cellCoords <- xyFromCell(raster_data1, 1:ncell(raster_data1))
+```
+
+```{r}
+duck_data_tidy <- duck_data %>%
+  rename(
+    lon = `location-long`,  # Change 'your_longitude_column_name' to the actual name
+    lat = `location-lat`    # Change 'your_latitude_column_name' to the actual name
+  )
+
+```
+
+```{r}
+duck_data_sf <- st_as_sf(duck_data, coords = c("location-long", "location-lat"), crs = 4326)
+
+
+ggplot(data = duck_data_sf) +
+  geom_sf() +
+  ggtitle("Duck Locations")
+```
+
+
+```{r}
+ggplot(duck_data, aes(x = `individual-local-identifier`)) +
+  geom_histogram(stat = "count", fill = "skyblue", color = "black") + 
+  theme_minimal(base_size = 14) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), 
+        plot.title = element_text(hjust = 0.5, size = 16), 
+        plot.subtitle = element_text(hjust = 0.5, size = 12), 
+        legend.position = "none") + 
+  labs(title = "Histogram showing the count of observations per loon.",
+       x = "Individual Identifier", y = "Frequency")
+
+```
+
+
+```{r}
+ggplot(goose_data, aes(x = `individual-local-identifier`)) +
+  geom_histogram(stat = "count", fill = "purple", color = "black", binwidth = 1) + 
+  theme_minimal(base_size = 14) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "none") + 
+  scale_x_discrete(limits = factor(goose_data$`individual-local-identifier`) %>% unique() %>% sort()) +
+  labs(title = "Histogram showing the count of observations per goose.",
+       x = "Individual Identifier", y = "Frequency") +
+  coord_flip()
+```
+
+```{r}
+center_latitude <- mean(duck_data_tidy$lat)
+center_longitude <- mean(duck_data_tidy$long)
+
+
+duck_data_tidy$lon <- as.numeric(duck_data_tidy$lon)
+duck_data_tidy$lat <- as.numeric(duck_data_tidy$lat)
+
+
+
+map <- get_map(location = c(lon = mean(duck_data_tidy$lon, na.rm = TRUE), 
+                            lat = mean(duck_data_tidy$lat, na.rm = TRUE)), zoom = 10)
+
+ggmap(map) +
+  geom_point(data = duck_data_tidy, aes(x = location-long, y = location-lat), color = "red", size = 3, alpha = 0.8) +
+  ggtitle("Duck Locations")
+```
+
+```{r}
+tags <- unique(duck_data2$tag_local_identifier)
+colors <- rainbow(length(tags))
+names(colors) <- tags
+
+# Create an interactive map
+map <- leaflet(duck_data_tidy) %>%
+  addTiles() 
+
+# Add markers for each tag-local-identifier with unique colors
+for(tag in tags) {
+  map <- map %>%
+    addCircleMarkers(
+      data = duck_data2 %>% filter(tag_local_identifier == tag),
+      ~longitude, ~latitude,
+      color = ~colors[as.character(tag_local_identifier)],
+      popup = ~as.character(tag_local_identifier),
+      radius = 5
+    )
+}
+
+
+map
+
+```
+
+```{r}
+specific_duck <- duck_data %>% 
+  filter(`individual-local-identifier` == '1367-19516')
+
+# Create the map
+map <- leaflet(specific_duck) %>%
+  addTiles() %>%
+  addMarkers(~longitude, ~latitude, popup = ~as.character(timestamp)) %>%
+  addPolylines(~longitude, ~latitude, group = ~`individual-local-identifier`, color = "red", weight = 2) %>%
+  setView(lng = mean(specific_duck$longitude), lat = mean(specific_duck$latitude), zoom = 6)
+
+
+map
+```
+
+
+```{r}
+specific_goose <- goose_data %>% 
+  filter(`individual-local-identifier` == '24Y')
+```
+
+```{r}
+# Create the base map with World Imagery
+map_combined <- leaflet() %>%
+  addProviderTiles(providers$Esri.WorldImagery)
+
+# Overlay the raster data
+map_combined <- map_combined %>%
+  addRasterImage(raster_data_na, 
+                 colors = colorNumeric(palette = "viridis", domain = range(values(raster_data_na), na.rm = TRUE)), 
+                 opacity = 0.7, 
+                 group = "Raster Data")
+
+# Overlay the migratory route
+map_combined <- map_combined %>%
+  addCircleMarkers(data = specific_goose, 
+                   ~`location-long`, ~`location-lat`, 
+                   popup = ~as.character(date), 
+                   group = "Migratory Route") %>%
+  addPolylines(data = specific_goose, 
+               ~`location-long`, ~`location-lat`, 
+               group = "Migratory Route", 
+               color = "red", weight = 2)
+
+# Add layers control to toggle visibility
+map_combined <- map_combined %>%
+  addLayersControl(overlayGroups = c("Raster Data", "Migratory Route"),
+                   options = layersControlOptions(collapsed = FALSE))
+
+# Set the initial view
+map_combined <- map_combined %>%
+  setView(lng = -95.7129, lat = 37.0902, zoom = 4)
+
+map_combined
+
+```
+
+```{r}
+# Filter for a specific Goose
+specific_goose2 <- goose_data %>% 
+  filter(`individual-local-identifier` == '10Y')
+```
+
+```{r}
+# Create the base map with World Imagery
+map_combined2 <- leaflet() %>%
+  addProviderTiles(providers$Esri.WorldImagery)
+
+# Overlay the raster data
+map_combined2 <- map_combined2 %>%
+  addRasterImage(raster_data_na, 
+                 colors = colorNumeric(palette = "viridis", domain = range(values(raster_data_na), na.rm = TRUE)), 
+                 opacity = 0.7, 
+                 group = "Raster Data")
+
+
+# Overlay the migratory route
+map_combined2 <- map_combined2 %>%
+  addCircleMarkers(data = specific_goose2, 
+                   ~`location-long`, ~`location-lat`, 
+                   popup = ~as.character(date), 
+                   group = "Migratory Route") %>%
+  addPolylines(data = specific_goose2, 
+               ~`location-long`, ~`location-lat`, 
+               group = "Migratory Route", 
+               color = "red", weight = 2)
+
+# Add layers control to toggle visibility
+map_combined2 <- map_combined2 %>%
+  addLayersControl(overlayGroups = c("Raster Data", "Migratory Route"),
+                   options = layersControlOptions(collapsed = FALSE))
+
+# Set the initial view
+map_combined2 <- map_combined2 %>%
+  setView(lng = -95.7129, lat = 37.0902, zoom = 4)
+
+# Print the combined map
+map_combined2
+
+
+```
+
+```{r}
+
+specific_duck2 <- duck_data %>% 
+  filter(`individual-local-identifier` == '1367-19517')
+
+# Create the map
+map2 <- leaflet(specific_duck2) %>%
+  addProviderTiles(providers$Esri.WorldImagery) %>%  
+  addCircleMarkers(~`longitude`, ~`location-lat`, 
+                   popup = ~as.character(timestamp), 
+                   color = "#0078A8", fillColor = "#0078A8", 
+                   fillOpacity = 0.8, weight = 1, radius = 5) %>%  
+  addPolylines(~`longitude`, ~`location-lat`, 
+               group = ~`individual-local-identifier`, 
+               color = "red", weight = 2, opacity = 0.8) %>%
+  setView(lng = mean(specific_duck2$`location-long`, na.rm = TRUE), 
+          lat = mean(specific_duck2$`location-lat`, na.rm = TRUE), 
+          zoom = 6)
+
+map2
+```
+
+```{r}
+# Create the base map with World Imagery
+map_combined <- leaflet() %>%
+  addProviderTiles(providers$Esri.WorldImagery)
+
+# Overlay the raster data
+map_combined <- map_combined %>%
+  addRasterImage(raster_data_na, 
+                 colors = colorNumeric(palette = "viridis", domain = range(values(raster_data_na), na.rm = TRUE)), 
+                 opacity = 0.7, 
+                 group = "Raster Data")
+
+# Overlay the migratory route for the first goose
+map_combined <- map_combined %>%
+  addCircleMarkers(data = specific_goose, 
+                   ~`location-long`, ~`location-lat`, 
+                   popup = ~as.character(date), 
+                   group = "Migratory Route Goose 1",
+                   color = "blue", weight = 1, radius = 1) %>%
+  addPolylines(data = specific_goose, 
+               ~`location-long`, ~`location-lat`, 
+               group = "Migratory Route Goose 1", 
+               color = "blue", weight = 2)
+
+# Overlay the migratory route for the second goose
+map_combined <- map_combined %>%
+  addCircleMarkers(data = specific_goose2, 
+                   ~`location-long`, ~`location-lat`, 
+                   popup = ~as.character(date), 
+                   group = "Migratory Route Goose 2",
+                   color = "green", weight = 1, radius = 1) %>%
+  addPolylines(data = specific_goose2, 
+               ~`location-long`, ~`location-lat`, 
+               group = "Migratory Route Goose 2", 
+               color = "green", weight = 2)
+
+
+map_combined <- map_combined %>%
+  addLayersControl(overlayGroups = c("Raster Data", "Migratory Route Goose 1", "Migratory Route Goose 2"),
+                   options = layersControlOptions(collapsed = FALSE))
+
+
+map_combined <- map_combined %>%
+  setView(lng = -95.7129, lat = 37.0902, zoom = 4)
+
+
+map_combined
+
+```
+```{r}
+map2 <- leaflet() %>%
+  addProviderTiles(providers$Esri.WorldImagery) %>%
+  addRasterImage(raster_data_na, 
+                 colors = colorNumeric(palette = "viridis", domain = range(values(raster_data_na), na.rm = TRUE)), 
+                 opacity = 0.7, 
+                 group = "Raster Data") %>%
+  addCircleMarkers(data = specific_duck2, 
+                   ~longitude, ~latitude, 
+                   popup = ~as.character(timestamp), 
+                   radius = 3, color = "#555", fillColor = "#555", 
+                   fillOpacity = 0.5, weight = 0.5, 
+                   group = "Migratory Route") %>%
+  addPolylines(data = specific_duck2, 
+               ~`location-long`, ~`location-lat`, 
+               group = "Migratory Route", 
+               color = "#FF5733", weight = 2, opacity = 0.8) %>%
+  addLayersControl(overlayGroups = c("Raster Data", "Migratory Route"),
+                   options = layersControlOptions(collapsed = FALSE)) %>%
+  setView(lng = mean(specific_duck2$`location-long`, na.rm = TRUE), 
+          lat = mean(specific_duck2$`location-lat`, na.rm = TRUE), zoom = 6)
+
+
+map2
+```
+
+```{r}
+map8 <- leaflet() %>%
+  addProviderTiles(providers$Esri.WorldImagery) %>%
+  addRasterImage(raster_data_na, 
+                 colors = colorNumeric(palette = "viridis", domain = range(values(raster_data_na), na.rm = TRUE)), 
+                 opacity = 0.7, 
+                 group = "Raster Data") %>%
+  addCircleMarkers(data = specific_duck8, 
+                   ~longitude, ~latitude, 
+                   popup = ~as.character(timestamp), 
+                   radius = 3, color = "#555", fillColor = "#555", 
+                   fillOpacity = 0.5, weight = 0.5, 
+                   group = "Migratory Route") %>%
+  addPolylines(data = specific_duck8, 
+               ~longitude, ~latitude, 
+               group = "Migratory Route", 
+               color = "#FF5733", weight = 2, opacity = 0.8) %>%
+  addLayersControl(overlayGroups = c("Raster Data", "Migratory Route"),
+                   options = layersControlOptions(collapsed = FALSE)) %>%
+  setView(lng = mean(specific_duck8$longitude, na.rm = TRUE), 
+          lat = mean(specific_duck8$latitude, na.rm = TRUE), zoom = 2.5)
+
+
+map8
+```
+
+```{r}
+specific_duck8 <- duck_data %>% 
+  filter(`individual-local-identifier` == '1587-50834')
+```
+
+
+```{r}
+# Create a combined map
+map_combined3 <- leaflet() %>%
+  addProviderTiles(providers$Esri.WorldImagery) %>%
+  addRasterImage(raster_data_na, 
+                 colors = colorNumeric(palette = "viridis", domain = range(values(raster_data_na), na.rm = TRUE)), 
+                 opacity = 0.7, 
+                 group = "Raster Data") %>%
+  # Duck 2 Route
+  addCircleMarkers(data = specific_duck2, 
+                   ~longitude, ~latitude, 
+                   popup = ~as.character(timestamp), 
+                   radius = 3, color = "#FF5733", fillColor = "#FF5733", 
+                   fillOpacity = 0.5, weight = 0.5, 
+                   group = "Migratory Route Duck 2") %>%
+  addPolylines(data = specific_duck2, 
+               ~longitude, ~latitude, 
+               group = "Migratory Route Duck 2", 
+               color = "#FF5733", weight = 2, opacity = 0.8) %>%
+  # Duck 8 Route
+  addCircleMarkers(data = specific_duck8, 
+                   ~longitude, ~latitude, 
+                   popup = ~as.character(timestamp), 
+                   radius = 3, color = "blue", fillColor = "blue", 
+                   fillOpacity = 0.5, weight = 0.5, 
+                   group = "Migratory Route Duck 8") %>%
+  addPolylines(data = specific_duck8, 
+               ~longitude, ~latitude, 
+               group = "Migratory Route Duck 8", 
+               color = "blue", weight = 2, opacity = 0.8) %>%
+  addLayersControl(overlayGroups = c("Raster Data", "Migratory Route Duck 2", "Migratory Route Duck 8"),
+                   options = layersControlOptions(collapsed = FALSE)) %>%
+  setView(lng = mean(c(mean(specific_duck2$longitude, na.rm = TRUE), mean(specific_duck8$longitude, na.rm = TRUE))),
+          lat = mean(c(mean(specific_duck2$latitude, na.rm = TRUE), mean(specific_duck8$latitude, na.rm = TRUE))),
+          zoom = 5)
+
+
+map_combined3
+```
+
+
+```{r}
+raster_df <- as.data.frame(raster_data1, xy=TRUE)
+raster_df2 <- as.data.frame(raster_data_geo, xy=TRUE)
+head(raster_df2)
+
+```
+
+```{r}
+ raster_df2 <- raster_df2 %>% rename(Urban_prob = rastergoodes)
+
+```
+
+```{r}
+raster_df2 <- raster_df2 %>%
+  rename(
+    longitude = x,
+    latitude = y
+  )
+```
+
+
+```{r}
+duck_data <- duck_data %>%
+  rename(
+    longitude = `location-long`,
+    latitude = `location-lat`
+  )
+```
+
+
+```{r}
+# Convert duck_data to an sf object
+duck_data_sf <- st_as_sf(duck_data, coords = c("longitude", "latitude"), crs = 4326)
+
+# Convert raster_df to an sf object
+raster_df_sf <- st_as_sf(raster_df2, coords = c("longitude", "latitude"), crs = 4326)
+
+```
+
+```{r}
+raster_sf <- st_as_sf(raster_df2, coords = c("longitude", "latitude"), crs = 4326)
+
+```
+
+```{r}
+# Define bounds of North America (approximate)
+north_america_bounds <- st_sfc(st_polygon(list(matrix(c(-168.5, 5.5, -50.5, 5.5, -50.5, 83.5, -168.5, 83.5, -168.5, 5.5), ncol = 2, byrow = TRUE))), crs = 4326)
+
+```
+
+```{r}
+raster_sf_na <- st_filter(raster_sf, north_america_bounds)
+
+
+```
+
+```{r}
+goose_data_clean <- goose_data[!is.na(goose_data$`location-long`) & !is.na(goose_data$`location-lat`), ]
+
+
+```
+
+```{r} 
+goose_data_sf <- st_as_sf(goose_data_clean, coords = c('location-long', 'location-lat'), crs = 4326)
+
+```
+
+```{r}
+
+goose_sf_projected <- st_transform(goose_data_sf, 3857) 
+buffer_size2 <- 20000  
+points_sf_buffered2 <- st_buffer(goose_sf_projected, dist = buffer_size2)
+
+
+points_sf_buffered2 <- st_transform(points_sf_buffered2, 4326)
+```
+
+```{r}
+
+ducks_sf_projected <- st_transform(duck_data_sf, 3857)  
+buffer_size <- 30000  
+points_sf_buffered <- st_buffer(ducks_sf_projected, dist = buffer_size)
+
+
+points_sf_buffered <- st_transform(points_sf_buffered, 4326)
+```
+
+```{r}
+joined_sf_direct <- st_join(points_sf_buffered, raster_sf_na, join = st_intersects)
+```
+
+```{r}
+joined_sf_direct2 <- st_join(points_sf_buffered2, raster_sf_na, join = st_intersects)
+```
+
+
+```{r}
+goose_data_clean <- goose_data_clean %>%
+  mutate(longitude = `location-long`,
+    latitude = `location-lat`)
+
+```
+
+
+```{r}
+model <- lm(`argos:lat1` ~ Urban_prob + `argos:lon1` + date, data =joined_sf_direct)
+```
+
+```{r}
+model2 <- lm(latitude ~ Urban_prob + longitude + date, data =joined_sf_direct2)
+```
+
+
+
+```{r}
+stargazer(model, type = "text", title = "Regression Results", intercept.bottom = FALSE, single.row = TRUE, header = FALSE, digits = 5)
+```
+```{r}
+stargazer(model2, type = "text", title = "Regression Results", intercept.bottom = FALSE, single.row = TRUE, header = FALSE, digits = 5)
+```
+```{r}
+check_model(model)
+```
+
+```{r}
+check_collinearity(model2)
+```
+
+```{r}
+tidy_model <- tidy(model)
+print(tidy_model)
+```
+
+```{r}
+ggplot(joined_sf_direct, aes(x = Urban_prob, y = `argos:lat1`)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  theme_minimal() +
+  labs(title = "Effect of Urban Probability on Latitude",
+       x = "Urban Probability",
+       y = "Latitude")
+
+# Check for multicollinearity with VIF
+vif(model)
+```
