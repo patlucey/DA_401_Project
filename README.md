@@ -20,9 +20,11 @@ Raster data files:
 - rasterwgs84.tif
 - noise2.tif
 - rastergoodes.tif
+
+
 CSV files:
-duck_data.csv
-goose.csv
+- duck_data.csv
+- goose.csv
 
 Key Variables(Raster data):
 Latitude: Coordinate point for the latitudinal location of the point in the map.
