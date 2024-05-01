@@ -539,7 +539,7 @@ ggplot(joined_sf_direct, aes(x = Urban_prob, y = `argos:lat1`)) +
 vif(model)
 ```
 
-
+### Updated chunks below:
 ```{r}
 # 
 t_test_result <- t.test(filtered_sf_direct2$Urban_prob, filtered_sf_direct$Urban_prob, var.equal = FALSE) # Use var.equal = FALSE for Welch's t-test
