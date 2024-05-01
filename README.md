@@ -17,7 +17,7 @@ Will look into the connection of bird migration and how it is impacted by differ
 ## Data Description / Key variables
 To access and manipulate these files in R-Studio they require the use of the sf and terra packages to access the .tif files. In order to access the CSV files use the readr package that comes with R. The R-Markdown should run top down with the download of the datasets outlined in this readme. 
 
-The code file is stored in 401fproj_final.rmd which can be downloaded from here and ran in R-Studio
+The code file is stored in revised401fproj_final.rmd which can be downloaded from here and ran in R-Studio
 
 Raster data files:
 - rasterwgs84.tif
